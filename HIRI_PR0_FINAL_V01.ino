@@ -120,7 +120,7 @@ String lastSavedCSVLine = ""; // Used in sd_card.ino for OLED display
 File uploadFile;              // Used in wifi.ino for file uploads
 
 String deviceID = "/HIRIP";
-const char *DEVICE_ID_STR = "9"; // el 06 gatilla accioes especiales como el sensor sds198
+const char *DEVICE_ID_STR = "80"; // el 06 gatilla accioes especiales como el sensor sds198
 String AP_SSID_STR = "";
 const char *AP_PASSWORD = "12345678";
 String apIpStr = "0.0.0.0";
@@ -135,9 +135,9 @@ const char *API_BASE = "http://api-sensores.cmasccp.cl/insertarMedicion";
 //const char* IDS_SENSORES = "460,460,460,460,460,461,461,461,461,461,462,463,464,464,464,464,464,467"; //sensor 6   // tiene un sensor SDS198 
 //const char* IDS_SENSORES = "468,468,468,468,468,469,469,469,469,469,470,471,472,472,472,472,472"; //sensor 7 
 //const char* IDS_SENSORES = "473,473,473,473,473,474,474,474,474,474,475,476,477,477,477,477,477"; //sensor 8 
-const char* IDS_SENSORES = "478,478,478,478,478,479,479,479,479,479,480,481,482,482,482,482,482,483,483"; //sensor 9
+//const char* IDS_SENSORES = "478,478,478,478,478,479,479,479,479,479,480,481,482,482,482,482,482,483,483"; //sensor 9
 //const char* IDS_SENSORES = "484,484,484,484,484,485,485,485,485,485,486,487,488,488,488,488,488,489,489"; //sensor 10 
-//const char* IDS_SENSORES = "927,927,927,927,927,928,928,928,928,928,929,930,931,931,931,931,931,932,932"; //sensor 80
+const char* IDS_SENSORES = "927,927,927,927,927,928,928,928,928,928,929,930,931,931,931,931,931,932,932"; //sensor 80
 //const char* IDS_SENSORES = "933,933,933,933,933,934,934,934,934,934,935,936,937,937,937,937,937,938,938"; //sensor 81
 //const char* IDS_SENSORES = "939,939,939,939,939,940,940,940,940,940,941,942,943,943,943,943,943,944,944"; //sensor 82
 //const char* IDS_SENSORES = "945,945,945,945,945,946,946,946,946,946,947,948,949,949,949,949,949,950,950"; //sensor 83
