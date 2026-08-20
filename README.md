@@ -23,6 +23,7 @@ Firmware para estación de monitoreo técnico-científico basada en ESP32, con a
 
 - **Manual de Usuario:** `documentacion/MANUAL_USUARIO.md`
 - **Manual Técnico:** `documentacion/MANUAL_TECNICO.md`
+- **PCB, pinout y revisión de hardware:** [`PCB/README.md`](PCB/README.md)
 - **Historial de cambios:** `documentacion/CAMBIOS.md`
 - **Guía de desarrollo/versionado:** `documentacion/DEVELOPER_GUIDELINES.md`
 - **Estructura de menú:** `documentacion/menu_structure.md`
