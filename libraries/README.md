@@ -13,7 +13,9 @@ de librerías de Arduino.
 | `RTClib` | RTClib | 2.1.4 | RTC DS3231 |
 | `Adafruit_NeoPixel` | Adafruit NeoPixel | 1.12.5 | LED RGB |
 | `Adafruit_SHT31_Library` | Adafruit SHT31 Library | 2.2.2 | Sensor SHT31 |
+| `Adafruit_SHT4x_Library` | Adafruit SHT4x Library | 1.0.3 | Sensor SHT41 del test de componentes |
 | `Adafruit_BusIO` | Adafruit BusIO | 1.17.4 | Dependencia de RTClib y SHT31 |
+| `Adafruit_Unified_Sensor` | Adafruit Unified Sensor | 1.1.15 | Dependencia de Adafruit SHT4x |
 | `EspSoftwareSerial` | EspSoftwareSerial | 8.1.0 | UART por software del Plantower |
 | `TinyGSM` | TinyGSM | 0.12.0 | Módem SIM7600 |
 | `OneButton` | OneButton | 2.5.0 | Interfaz de botones del firmware principal |
@@ -41,7 +43,7 @@ Se puede usar una de estas alternativas:
 
 1. Configurar temporalmente la raíz de este repositorio como **Sketchbook
    location** en Preferencias. Arduino reconocerá su subcarpeta `libraries`.
-2. Copiar las ocho carpetas individuales a la carpeta `libraries` del sketchbook
+2. Copiar las diez carpetas individuales a la carpeta `libraries` del sketchbook
    habitual, normalmente `Documentos\Arduino\libraries`.
 
 Si ya existe otra versión instalada globalmente, revise la salida detallada de

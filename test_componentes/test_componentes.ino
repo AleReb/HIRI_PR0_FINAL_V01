@@ -5,13 +5,14 @@
  *   - ESP32 Dev Module
  *   - OLED SSD1306 128x64 I2C (SDA 21, SCL 22, direccion 0x3C)
  *   - RTC DS3231 I2C (direccion 0x68)
+ *   - SHT41 I2C (direccion 0x44)
  *   - NeoPixel RGB, 1 LED, GPIO 12
  *   - Boton 1 GPIO 19 y boton 2 GPIO 23 (resistencia externa, activos en HIGH)
  *   - Plantower/PMS por SoftwareSerial a 9600 baud
  *   - Divisor de voltaje de bateria en ADC GPIO 35
  *
  * Librerias necesarias:
- *   U8g2, RTClib y Adafruit NeoPixel
+ *   U8g2, RTClib, Adafruit NeoPixel y Adafruit SHT4x
  *
  * Esta prueba no inicializa modem, GPS, SD ni sensores de particulas.
  */
@@ -22,12 +23,14 @@
 #include <RTClib.h>
 #include <Adafruit_NeoPixel.h>
 #include <SoftwareSerial.h>
+#include "Adafruit_SHT4x.h"
 
 // -------------------- Pines --------------------
 constexpr uint8_t I2C_SDA_PIN = 21;
 constexpr uint8_t I2C_SCL_PIN = 22;
 constexpr uint8_t OLED_ADDRESS = 0x3C;
 constexpr uint8_t RTC_ADDRESS = 0x68;
+constexpr uint8_t SHT41_ADDRESS = 0x44;
 constexpr uint8_t RGB_PIN = 12;
 constexpr uint8_t RGB_COUNT = 1;
 constexpr uint8_t BUTTON_1_PIN = 19;
@@ -43,6 +46,9 @@ constexpr uint32_t SERIAL_BAUD = 115200;
 constexpr uint32_t DEBOUNCE_MS = 40;
 constexpr uint32_t RGB_STEP_MS = 1000;
 constexpr uint32_t DISPLAY_REFRESH_MS = 200;
+constexpr uint32_t DISPLAY_PAGE_MS = 5000;
+constexpr uint32_t SHT41_SAMPLE_MS = 2000;
+constexpr uint32_t SHT41_STALE_MS = 5000;
 constexpr uint32_t PMS_FIRST_FRAME_TIMEOUT_MS = 15000;
 constexpr uint32_t PMS_STALE_MS = 10000;
 // Prefijo propio para evitar colisionar con RGB_BRIGHTNESS, macro definida por
@@ -55,6 +61,7 @@ constexpr float BATTERY_FILTER_ALPHA = 0.8f;
 // Mismo constructor usado por el firmware principal.
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
 RTC_DS3231 rtc;
+Adafruit_SHT4x sht41;
 Adafruit_NeoPixel rgb(RGB_COUNT, RGB_PIN, NEO_GRB + NEO_KHZ800);
 SoftwareSerial pms(PMS_SOFT_RX_PIN, PMS_SOFT_TX_PIN);
 
@@ -73,6 +80,14 @@ bool oledFound = false;
 uint8_t oledAddress = 0;
 bool rtcFound = false;
 bool rtcLostPower = false;
+bool sht41Found = false;
+bool sht41ReadingOk = false;
+float sht41Temperature = NAN;
+float sht41Humidity = NAN;
+uint32_t sht41SerialNumber = 0;
+uint32_t lastSht41SampleMs = 0;
+uint32_t lastSht41ReadingMs = 0;
+uint32_t sht41ReadErrors = 0;
 bool rgbAutomatic = true;
 uint8_t colorIndex = 0;
 uint32_t lastRgbStepMs = 0;
@@ -114,6 +129,7 @@ void scanI2cBus() {
       Serial.printf("[I2C] Dispositivo encontrado en 0x%02X", address);
       if (address == OLED_ADDRESS) Serial.print(" (OLED esperado)");
       if (address == RTC_ADDRESS) Serial.print(" (RTC esperado)");
+      if (address == SHT41_ADDRESS) Serial.print(" (SHT41 esperado)");
       Serial.println();
       ++devices;
     }
@@ -123,6 +139,40 @@ void scanI2cBus() {
   oledAddress = i2cDevicePresent(OLED_ADDRESS) ? OLED_ADDRESS : 0;
   oledFound = oledAddress != 0;
   rtcFound = i2cDevicePresent(RTC_ADDRESS);
+}
+
+bool sht41ReadingValid() {
+  return sht41Found && sht41ReadingOk &&
+         (millis() - lastSht41ReadingMs <= SHT41_STALE_MS) &&
+         !isnan(sht41Temperature) && !isnan(sht41Humidity) &&
+         sht41Temperature >= -40.0f && sht41Temperature <= 125.0f &&
+         sht41Humidity >= 0.0f && sht41Humidity <= 100.0f;
+}
+
+void sampleSht41(bool force = false) {
+  if (!sht41Found) return;
+
+  const uint32_t now = millis();
+  if (!force && now - lastSht41SampleMs < SHT41_SAMPLE_MS) return;
+  lastSht41SampleMs = now;
+
+  sensors_event_t humidityEvent;
+  sensors_event_t temperatureEvent;
+  if (!sht41.getEvent(&humidityEvent, &temperatureEvent)) {
+    sht41ReadingOk = false;
+    ++sht41ReadErrors;
+    Serial.printf("[SHT41] ERROR de lectura (#%lu)\n",
+                  (unsigned long)sht41ReadErrors);
+    return;
+  }
+
+  sht41Temperature = temperatureEvent.temperature;
+  sht41Humidity = humidityEvent.relative_humidity;
+  sht41ReadingOk = !isnan(sht41Temperature) && !isnan(sht41Humidity);
+  if (sht41ReadingOk) lastSht41ReadingMs = now;
+
+  Serial.printf("[SHT41] T=%.2f C | HR=%.2f %% | %s\n", sht41Temperature,
+                sht41Humidity, sht41ReadingValid() ? "OK" : "REVISAR");
 }
 
 void showOledStartupPattern() {
@@ -321,7 +371,8 @@ void drawStatus() {
   oled.clearBuffer();
   oled.setFont(u8g2_font_5x7_tf);
   const bool requiredTestsOk = oledFound && rtcFound && !rtcLostPower &&
-                               pmsIsReceiving() && batteryVoltageValid() &&
+                               sht41ReadingValid() && pmsIsReceiving() &&
+                               batteryVoltageValid() &&
                                button1.pressCount > 0 && button2.pressCount > 0;
   oled.drawStr(0, 7, requiredTestsOk ? "TEST: TODO OK*" : "TEST COMPONENTES HIRI");
   oled.drawHLine(0, 10, 128);
@@ -393,6 +444,55 @@ void drawStatus() {
   oled.sendBuffer();
 }
 
+void drawSht41Screen() {
+  if (!oledFound) return;
+
+  oled.clearBuffer();
+  oled.setFont(u8g2_font_6x12_tf);
+  oled.drawStr(12, 11, "SHT41 - I2C 0x44");
+  oled.drawHLine(0, 14, 128);
+
+  if (!sht41Found) {
+    oled.setFont(u8g2_font_6x12_tf);
+    oled.drawStr(15, 34, "NO ENCONTRADO");
+    oled.setFont(u8g2_font_5x7_tf);
+    oled.drawStr(8, 49, "Revise VBAT/SDA/SCL");
+    oled.drawStr(16, 60, "Sensor requerido");
+  } else if (!sht41ReadingValid()) {
+    oled.setFont(u8g2_font_6x12_tf);
+    oled.drawStr(15, 34, "LECTURA: FAIL");
+    oled.setFont(u8g2_font_5x7_tf);
+    oled.setCursor(20, 50);
+    oled.print("Errores: ");
+    oled.print(sht41ReadErrors);
+  } else {
+    oled.setFont(u8g2_font_6x12_tf);
+    oled.setCursor(5, 31);
+    oled.print("TEMP: ");
+    oled.print(sht41Temperature, 2);
+    oled.print(" C");
+    oled.setCursor(5, 47);
+    oled.print("HUM : ");
+    oled.print(sht41Humidity, 2);
+    oled.print(" %");
+    oled.setFont(u8g2_font_5x7_tf);
+    oled.setCursor(5, 61);
+    oled.print("SERIE: ");
+    oled.print(sht41SerialNumber, HEX);
+  }
+
+  oled.sendBuffer();
+}
+
+void drawDisplay() {
+  const bool showSht41Page = ((millis() / DISPLAY_PAGE_MS) % 2U) == 1U;
+  if (showSht41Page) {
+    drawSht41Screen();
+  } else {
+    drawStatus();
+  }
+}
+
 void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(300);
@@ -442,13 +542,27 @@ void setup() {
     Serial.println("[RTC] FAIL: DS3231 no encontrado");
   }
 
+  if (i2cDevicePresent(SHT41_ADDRESS) && sht41.begin(&Wire)) {
+    sht41Found = true;
+    sht41SerialNumber = sht41.readSerial();
+    sht41.setPrecision(SHT4X_HIGH_PRECISION);
+    sht41.setHeater(SHT4X_NO_HEATER);
+    Serial.printf("[SHT41] OK en 0x%02X, serie 0x%08lX\n", SHT41_ADDRESS,
+                  (unsigned long)sht41SerialNumber);
+    Serial.println("[SHT41] Alta precision, calentador desactivado");
+    sampleSht41(true);
+  } else {
+    sht41Found = false;
+    Serial.println("[SHT41] FAIL: no encontrado en 0x44");
+  }
+
   Serial.println("[BOTONES] B1=GPIO19, B2=GPIO23, resistencia externa, activos en HIGH");
   Serial.println("[BATERIA] Midiendo divisor de voltaje en GPIO35");
   Serial.println("[AYUDA] B1 avanza el color; B2 activa/desactiva ciclo automatico");
   Serial.println("[AYUDA] Verifique visualmente RGB y OLED; el software no puede medir su luz");
 
   setRgbColor(colorIndex);
-  drawStatus();
+  drawDisplay();
 }
 
 void loop() {
@@ -456,6 +570,7 @@ void loop() {
 
   parsePms();
   sampleBattery();
+  sampleSht41();
 
   if (updateButton(button1)) {
     rgbAutomatic = false;
@@ -481,7 +596,7 @@ void loop() {
 
   if (now - lastDisplayMs >= DISPLAY_REFRESH_MS) {
     lastDisplayMs = now;
-    drawStatus();
+    drawDisplay();
   }
 
   static uint32_t lastRtcPrintMs = 0;

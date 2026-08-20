@@ -43,6 +43,7 @@ tarjeta SD, SDS198 ni los servicios de telemetría.
 |---|---|---|
 | OLED SSD1306 128×64 | I²C `0x3C`, SDA 21, SCL 22 | Detección I²C, patrón visual y pantalla de estado |
 | RTC DS3231 | I²C `0x68` | Presencia, hora, temperatura interna y pérdida de alimentación |
+| SHT41 | I²C `0x44` | Detección, número de serie, temperatura y humedad en pantalla dedicada |
 | Plantower/PMS | 9600 baud, RX 5, TX 18 | Trama, checksum, PM1, PM2.5, PM10 y T/H cuando el modelo las incluye |
 | NeoPixel RGB | GPIO 12 | Secuencia rojo, verde, azul, blanco y apagado |
 | Botón 1 | GPIO 19, activo en HIGH | Estado, antirrebote y contador de pulsaciones |
@@ -55,8 +56,9 @@ configuran como `INPUT`: sueltos se leen en LOW y pulsados en HIGH.
 ### Información mostrada
 
 La OLED utiliza el mismo constructor SSD1306, fuente y rotación `U8G2_R2` del
-firmware principal. Al arrancar muestra un patrón de pantalla y luego un resumen
-similar al siguiente:
+firmware principal. Al arrancar muestra un patrón de pantalla y luego alterna
+cada cinco segundos entre el resumen general y una pantalla dedicada al SHT41.
+El resumen es similar al siguiente:
 
 ```text
 TEST COMPONENTES HIRI
@@ -80,8 +82,8 @@ El monitor serie a **115200 baud** entrega además el escaneo I²C, cada trama
 válida del Plantower, errores de checksum, hora y temperatura del RTC, cambios
 del RGB, pulsaciones y voltaje de batería.
 
-El encabezado cambia a `TEST: TODO OK*` cuando OLED, RTC, Plantower, batería y
-ambos botones superan las verificaciones automáticas. Para la batería se acepta
+El encabezado cambia a `TEST: TODO OK*` cuando OLED, RTC, SHT41, Plantower,
+batería y ambos botones superan las verificaciones automáticas. Para la batería se acepta
 como rango diagnóstico de una celda conectada entre 2,50 V y 4,50 V. El
 asterisco recuerda que el RGB debe comprobarse visualmente: el ESP32 puede
 ordenar un color, pero no medir si el LED realmente emitió luz.
