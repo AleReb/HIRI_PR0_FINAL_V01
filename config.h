@@ -28,6 +28,10 @@
 
 #include <Adafruit_NeoPixel.h>
 #include <Arduino.h>
+// TinyGSM ofrece este hook en sus esperas: mantener pulso de arranque sin tarea
+// extra y sin tocar la biblioteca. En operacion normal bootLedTick no hace nada.
+void bootLedTick();
+#define TINY_GSM_YIELD() do { bootLedTick(); delay(0); } while (0)
 #include <TinyGsmClient.h>
 
 // -------------------- Configuration System --------------------
@@ -41,6 +45,7 @@ struct SystemConfig {
   uint16_t httpTimeout;    // Timeout HTTP en segundos (default: 15)
 
   // Display OLED
+  bool carouselEnabled; // Carrusel persistente cada 10 s (default: false)
   bool oledAutoOff;     // Apagar OLED automáticamente (default: false)
   uint32_t oledTimeout; // Timeout en ms (default: 120000 = 2min)
 
@@ -69,7 +74,8 @@ enum DisplayState {
   DISP_RTC,
   DISP_STORAGE,
   DISP_GPS,
-  DISP_WIFI
+  DISP_WIFI,
+  DISP_CAROUSEL
 };
 #define DISP_MSG_DURATION_MS 1500
 

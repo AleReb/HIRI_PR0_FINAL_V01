@@ -79,6 +79,11 @@ static inline uint8_t lerp8(uint8_t a, uint8_t b, float t) {
   return (uint8_t)v;
 }
 void updatePmLed(float pm25) {
+  if (!config.ledEnabled) {
+    pixels.clear();
+    pixels.show();
+    return;
+  }
   uint8_t r = 0, g = 0, b = 0;
   if (pm25 <= 15.0f) {
     float t = pm25 / 15.0f;

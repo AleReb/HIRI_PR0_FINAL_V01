@@ -33,6 +33,8 @@ extern String failedTxPath;
 
 // Forward declarations
 void saveConfig();
+void requestSystemRestart();
+void setCarouselEnabled(bool enabled);
 void configSetDefaults();
 void printConfig();
 void applyLEDConfig();
@@ -88,7 +90,7 @@ void processSerialCommand() {
 
     Serial.println(F("\n[System]"));
     Serial.println(F("  sysinfo     - Show system info"));
-    Serial.println(F("  reboot      - Reboot ESP32"));
+    Serial.println(F("  reboot      - Restart ESP32 and request modem power cycle"));
     Serial.println(F("  mem         - Show memory usage"));
 
     Serial.println(F("\n[Streaming]"));
@@ -99,6 +101,7 @@ void processSerialCommand() {
     Serial.println(F("  BTN1: navegar / cancelar prompt"));
     Serial.println(F("  BTN2: seleccionar / confirmar prompt"));
     Serial.println(F("  Menu Mensajes -> guarda nota one-shot en CSV (columna notas)"));
+    Serial.println(F("  Configuracion > CARRUSEL: BTN2 ON/OFF (saved), BTN1 salir"));
     Serial.println(F("  Informacion > WIFI SD (ON/OFF): BTN2 entra/sale AP"));
 
     Serial.println(F("\n[Configuration]"));
@@ -109,6 +112,7 @@ void processSerialCommand() {
     Serial.println(
         F("  set httpsend 3/60/600/1200 - HTTP send period (seconds)"));
     Serial.println(F("  set httptimeout 5-30 - HTTP timeout (seconds)"));
+    Serial.println(F("  set carousel on/off - Rotate PM/temperature/humidity every 10s (saved)"));
     Serial.println(F("  set oledoff on/off  - OLED auto-off"));
     Serial.println(F("  set oledtime 60/120/180 - OLED timeout (seconds)"));
     Serial.println(F("  set led on/off      - Enable NeoPixel"));
@@ -272,9 +276,7 @@ void processSerialCommand() {
   }
 
   else if (cmd == "reboot") {
-    Serial.println("[SYSTEM] Rebooting in 2 seconds...");
-    delay(2000);
-    ESP.restart();
+    requestSystemRestart();
   }
 
   // -------------------- STREAMING COMMANDS --------------------
@@ -324,6 +326,7 @@ void processSerialCommand() {
 
   else if (cmd == "config display") {
     Serial.println("=== Display Configuration ===");
+    Serial.printf("Carousel: %s (10 s)\n", config.carouselEnabled ? "ON" : "OFF");
     Serial.printf("Auto-off: %s\n", config.oledAutoOff ? "ON" : "OFF");
     Serial.printf("Timeout:  %lu ms (%lu s)\n", config.oledTimeout,
                   config.oledTimeout / 1000);
@@ -398,6 +401,13 @@ void processSerialCommand() {
       } else {
         Serial.println("[CONFIG] ✗ Timeout must be 5-30 seconds");
       }
+    }
+
+    // Carrusel: mismo esquema "set" y guardado automatico que las otras opciones.
+    else if (param == "carousel on") {
+      setCarouselEnabled(true);
+    } else if (param == "carousel off") {
+      setCarouselEnabled(false);
     }
 
     // OLED auto-off

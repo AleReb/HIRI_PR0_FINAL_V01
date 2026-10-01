@@ -58,6 +58,7 @@ FirmwarePro es un firmware para monitoreo ambiental y telemetría técnica que i
 
 ## Configuración
 - RTC
+- Carrusel ON/OFF: BTN2 entra y alterna; BTN1 sale. Se guarda automáticamente.
 - Reiniciar
 - Volver
 
@@ -176,6 +177,7 @@ Comandos principales:
 - `set sdsave 3|60|600|1200`
 - `set httpsend 3|60|600|1200`
 - `set httptimeout <5..30>`
+- `set carousel on/off` (guardado automático; rota PM2.5/T/H cada 10 s)
 - `set oledoff on/off`
 - `set oledtime 60|120|180`
 - `set led on/off`

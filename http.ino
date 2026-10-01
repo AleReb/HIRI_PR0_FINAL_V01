@@ -8,6 +8,8 @@ extern const char apn[];
 extern const char gprsUser[];
 extern const char gprsPass[];
 extern bool hasRed;
+extern bool modemReady;
+extern void updateNetworkConnection(bool connected);
 extern float batV;
 extern uint16_t PM25;
 extern SystemConfig config;
@@ -18,82 +20,41 @@ extern bool atRun(const String &cmd, const String &expect1,
                   const String &expect2, uint32_t timeout_ms);
 extern bool sendAtSync(const String &cmd, String &resp, uint32_t timeout_ms);
 
-// Variables for PDP reconnect (kept local static as they are implementation
-// details)
-static uint8_t pdpReconnectFailCount = 0;
-static uint32_t lastPdpReconnectAttempt = 0;
-const uint8_t MAX_PDP_FAILS_BEFORE_BACKOFF = 5;
-const uint32_t PDP_BACKOFF_MS = 15000;
-const uint32_t PDP_RECONNECT_TIMEOUT_MS = 30000;
+// Un intento PDP por llamada, con pausa entre fallos.
+// TinyGSM es bloqueante (NETCLOSE hasta 60 s, NETOPEN hasta 75 s).
+// El watchdog de 180 s permite que ese intento retorne sin reset prematuro.
+static bool pdpReconnectBackoff = false;
+static uint32_t lastPdpReconnectFailure = 0;
+const uint32_t PDP_BACKOFF_MS = 60000;
 
-// Asegura sesión de datos PDP/NETOPEN activa antes de enviar HTTP.
-// Incluye control de backoff para evitar bucles de reconexión agresivos.
 bool ensurePdpAndNet() {
-  String dummy;
-  (void)sendAtSync("+CGDCONT=1,\"IP\",\"gigsky-02\"", dummy, 2000);
-
-  if (!modem.isGprsConnected()) {
-    // PROTECCIÓN CONTRA BLOQUEOS: Si hemos fallado muchas veces, esperar antes
-    // de reintentar Esto evita bloqueos cuando se viaja entre redes celulares o
-    // en zonas sin cobertura
-    if (pdpReconnectFailCount >= MAX_PDP_FAILS_BEFORE_BACKOFF) {
-      uint32_t timeSinceLastAttempt = millis() - lastPdpReconnectAttempt;
-      if (timeSinceLastAttempt < PDP_BACKOFF_MS) {
-        uint32_t remainingBackoff = PDP_BACKOFF_MS - timeSinceLastAttempt;
-        Serial.printf(
-            "[NET] Too many failures (%d), waiting %lu ms before retry\n",
-            pdpReconnectFailCount, remainingBackoff);
-        return false;
-      } else {
-        // Han pasado 15s, resetear contador y reintentar
-        Serial.println("[NET] Backoff period over, resetting fail counter");
-        pdpReconnectFailCount = 0;
-      }
-    }
-
-    Serial.println("[NET] PDP down, reconnecting...");
-    lastPdpReconnectAttempt = millis();
-
-    // MINI-LOOP CON WATCHDOG RESET: modem.gprsConnect() puede bloquear 10-60s
-    // Alimentamos el watchdog cada 1s para evitar reset del ESP32
-    uint32_t reconStart = millis();
-    bool reconOk = false;
-    while (millis() - reconStart < PDP_RECONNECT_TIMEOUT_MS) {
-      esp_task_wdt_reset(); // Evitar watchdog timeout cada 1s
-
-      if (modem.gprsConnect(apn, gprsUser, gprsPass)) {
-        reconOk = true;
-        break;
-      }
-
-      delay(1000); // Esperar 1s entre intentos internos
-    }
-
-    if (!reconOk) {
-      pdpReconnectFailCount++;
-      Serial.printf(
-          "[NET] PDP reconnect FAIL after %lu ms (fail count: %d/%d)\n",
-          PDP_RECONNECT_TIMEOUT_MS, pdpReconnectFailCount,
-          MAX_PDP_FAILS_BEFORE_BACKOFF);
-      hasRed = false;
-      return false;
-    }
-
-    // Éxito: resetear contador de fallos
-    pdpReconnectFailCount = 0;
-    hasRed = true;
-    Serial.println("[NET] PDP reconnected OK");
+  if (!modemReady) {
+    updateNetworkConnection(false);
+    return false;
   }
+  if (pdpReconnectBackoff &&
+      millis() - lastPdpReconnectFailure < PDP_BACKOFF_MS) return false;
 
-  String r;
-  if (!sendAtSync("+NETOPEN?", r, 2000) || r.indexOf("+NETOPEN: 1") < 0) {
-    if (!sendAtSync("+NETOPEN", r, 10000)) {
-      Serial.println("[NET] NETOPEN FAIL");
-      hasRed = false;
-      return false;
-    }
+  esp_task_wdt_reset();
+  if (modem.isGprsConnected()) {
+    pdpReconnectBackoff = false;
+    updateNetworkConnection(true);
+    return true;
   }
-  hasRed = true;
+  updateNetworkConnection(false);
+  Serial.println("[NET] PDP down: un intento de reconexion");
+  // Usar el APN configurado; no sustituirlo por un literal de otra SIM.
+  const bool connected = modem.gprsConnect(apn, gprsUser, gprsPass);
+  esp_task_wdt_reset();
+  updateNetworkConnection(connected);
+  if (!connected) {
+    pdpReconnectBackoff = true;
+    lastPdpReconnectFailure = millis();
+    Serial.println("[NET] PDP FAIL: siguiente intento en al menos 60 s");
+    return false;
+  }
+  pdpReconnectBackoff = false;
+  Serial.println("[NET] PDP reconnected OK");
   return true;
 }
 

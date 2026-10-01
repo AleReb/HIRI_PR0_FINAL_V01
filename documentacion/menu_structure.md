@@ -17,6 +17,7 @@ Referencia: `ui.ino` (estado actual de navegación y acciones).
 - `DISP_MESSAGE` → mensaje temporal no bloqueante.
 - `DISP_PROMPT` → confirmación de iniciar/detener muestreo.
 - `DISP_NETWORK` → pantalla de red.
+- `DISP_CAROUSEL` → control persistente del carrusel (BTN2 ON/OFF, BTN1 salir).
 - `DISP_RTC` → pantalla RTC (con sincronización por BTN2).
 - `DISP_STORAGE` → pantalla de archivo/tamaño.
 - `DISP_GPS` → pantalla de estado GPS.
@@ -67,8 +68,9 @@ Referencia: `ui.ino` (estado actual de navegación y acciones).
 | Índice | Texto | Acción |
 |---|---|---|
 | 0 | RTC | Abre pantalla `DISP_RTC` |
-| 1 | REINICIAR | Ejecuta `handleRestart()` |
-| 2 | VOLVER | Regresa a Depth 1 |
+| 1 | CARRUSEL: ON/OFF | Abre `DISP_CAROUSEL`; BTN2 alterna y guarda |
+| 2 | REINICIAR | Ejecuta `handleRestart()` |
+| 3 | VOLVER | Regresa a Depth 1 |
 
 ---
 
@@ -108,3 +110,15 @@ Cada modificación de menú debe sincronizarse con:
 2. `MANUAL_USUARIO.md`
 3. `menu_structure.md`
 4. `CAMBIOS.md` (si es cambio funcional)
+
+## Carrusel del inicio
+
+Al habilitarlo rota PM2.5, temperatura y humedad cada 10 segundos.
+Se pausa fuera de las vistas de datos normales. La navegación manual reinicia
+la espera, y la selección ON/OFF se conserva en Preferences (`config/carousel`).
+Serial: `set carousel on/off`; consulta: `config display`; ayuda: `help`.
+
+En Empezar/Detener muestreo y Opciones del inicio, el carrusel vuelve a PM2.5
+tras 10 segundos sin seleccionar. Dentro de submenús o confirmaciones se pausa.
+Reiniciar reinicia ESP32; el siguiente arranque verifica AT/PDP antes de decidir
+si solicita un ciclo SIM7600. Un modem que responde permanece encendido.

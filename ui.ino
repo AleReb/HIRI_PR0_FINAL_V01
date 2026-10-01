@@ -54,6 +54,9 @@ extern float pmsHum;
 extern String satellitesStr;
 extern struct AtSession at;
 extern SystemConfig config;
+void setCarouselEnabled(bool enabled);
+void drawCarouselConfigScreen();
+void requestSystemRestart();
 extern volatile enum DisplayState displayState;
 extern volatile uint32_t displayStateStartTime;
 extern uint32_t lastOledActivity;
@@ -196,9 +199,10 @@ const uint16_t msgIcons[] = {
 
 // Menú de “Configuración”
 // Menú de “Configuración”
-const char *cfgItems[] = {"RTC", "REINICIAR", "VOLVER"};
+const char *cfgItems[] = {"RTC", "CARRUSEL", "REINICIAR", "VOLVER"};
 const uint16_t cfgIcons[] = {
     0x01CB, // rtc/función
+    0,      // carrusel: flechas propias dibujadas por drawRotationArrows
     0x00D5, // reiniciar
     0x01A9  // volver
 };
@@ -228,6 +232,44 @@ Menu menus[] = {
 uint8_t menuDepth = 0; // 0 = principal, 1+ = submenus
 uint8_t menuIndex = 0; // Índice seleccionado
 bool uiFullMode = false;
+
+// Carrusel limitado a las tres vistas de datos originales.
+const uint8_t CAROUSEL_SENSOR_PAGES[] = {0, 1, 2}; // PM2.5, temperatura, humedad
+const uint8_t CAROUSEL_PAGE_COUNT = sizeof(CAROUSEL_SENSOR_PAGES);
+const uint32_t CAROUSEL_INTERVAL_MS = 10000;
+uint8_t carouselPage = 0;
+uint32_t lastCarouselAdvanceMs = 0;
+bool carouselWasVisible = false;
+
+// Reiniciar la espera al navegar: los botones conservan su accion habitual.
+void resetCarouselTimer() {
+  carouselWasVisible = false;
+  lastCarouselAdvanceMs = millis();
+}
+
+void updateCarousel() {
+  const uint32_t now = millis();
+  // Incluir las opciones 3/4 del inicio para regresar tras 10 s sin seleccion.
+  // Submenus, confirmaciones y pantallas especiales nunca se cierran solos.
+  const bool visible = config.carouselEnabled && menuDepth == 0 &&
+      displayState == DISP_NORMAL && !uiFullMode && !wifiModeActive &&
+      !(config.oledAutoOff && now - lastOledActivity > config.oledTimeout);
+  if (!visible) {
+    carouselWasVisible = false;
+    return;
+  }
+  if (!carouselWasVisible) {
+    carouselPage = menuIndex < CAROUSEL_PAGE_COUNT ? menuIndex : 0;
+    lastCarouselAdvanceMs = now;
+    carouselWasVisible = true;
+  }
+  if (now - lastCarouselAdvanceMs >= CAROUSEL_INTERVAL_MS) {
+    carouselPage = menuIndex >= CAROUSEL_PAGE_COUNT
+        ? 0 : (carouselPage + 1) % CAROUSEL_PAGE_COUNT;
+    menuIndex = CAROUSEL_SENSOR_PAGES[carouselPage];
+    lastCarouselAdvanceMs = now;
+  }
+}
 
 // Guard de acciones UI para evitar dobles disparos por rebote/eventos
 // solapados.
@@ -428,14 +470,34 @@ void drawSensorValue(uint8_t idx) {
   u8g2.drawStr((128 - wLbl) / 2, 53, baseF.c_str());
 }
 
+// Dos flechas curvas opuestas: icono propio, independiente de la fuente.
+void drawRotationArrows(uint8_t x, uint8_t y) {
+  u8g2.drawLine(x + 3, y + 9, x + 3, y + 5);
+  u8g2.drawLine(x + 3, y + 5, x + 6, y + 2);
+  u8g2.drawLine(x + 6, y + 2, x + 12, y + 2);
+  u8g2.drawLine(x + 12, y + 2, x + 16, y + 5);
+  u8g2.drawLine(x + 16, y + 5, x + 16, y + 8);
+  u8g2.drawTriangle(x + 13, y + 6, x + 16, y + 9, x + 19, y + 6);
+  u8g2.drawLine(x + 17, y + 11, x + 17, y + 15);
+  u8g2.drawLine(x + 17, y + 15, x + 14, y + 18);
+  u8g2.drawLine(x + 14, y + 18, x + 8, y + 18);
+  u8g2.drawLine(x + 8, y + 18, x + 4, y + 15);
+  u8g2.drawLine(x + 4, y + 15, x + 4, y + 12);
+  u8g2.drawTriangle(x + 1, y + 14, x + 4, y + 11, x + 7, y + 14);
+}
+
 // Dibuja item de menú con icono y texto centrados.
 // Reutiliza estructuras de menú para mantener UI modular.
 void drawMenuItemWithIcon(uint8_t depth, uint8_t idx) {
-  const char *txt = menus[depth].items[idx];
+  const char *txt = (depth == 3 && idx == 1)
+      ? (config.carouselEnabled ? "CARRUSEL: ON" : "CARRUSEL: OFF")
+      : menus[depth].items[idx];
   const uint16_t *ic = menus[depth].icons;
 
   // 1) Dibuja icono centrado y encima del texto
-  if (ic && ic[idx] != 0) {
+  if (depth == 3 && idx == 1) {
+    drawRotationArrows(54, 17);
+  } else if (ic && ic[idx] != 0) {
     // Submenús usan streamline_all_t (16x16 aprox)
     u8g2.setFont(u8g2_font_streamline_all_t);
     uint8_t iconW = u8g2.getMaxCharWidth();
@@ -490,6 +552,7 @@ void drawFullModeView() {
 // Render principal de OLED con estado normal y estados transitorios.
 // Integra cabecera, cuerpo de menú y footer en cada refresco.
 void renderDisplay() {
+  updateCarousel();
   u8g2.clearBuffer();
   drawHeader();
 
@@ -556,6 +619,11 @@ void renderDisplay() {
     return;
   }
 
+  if (displayState == DISP_CAROUSEL) {
+    drawCarouselConfigScreen();
+    return;
+  }
+
   if (displayState == DISP_WIFI) {
     drawWifiModeScreen();
     return;
@@ -573,7 +641,8 @@ void renderDisplay() {
     // Menu Principal
     // Items 0-2 son sensores (PM2.5, Temp, Hum)
     if (menuIndex < 3) {
-      drawSensorValue(menuIndex);
+      drawSensorValue(carouselWasVisible
+          ? CAROUSEL_SENSOR_PAGES[carouselPage] : menuIndex);
     } else {
       // Items 3+ (Infos, Opciones)
       const char *txt = (menuIndex == 3) ? (streaming ? "DETENER MUESTREO" : "EMPEZAR MUESTREO") : menus[0].items[menuIndex];
@@ -594,7 +663,10 @@ void renderDisplay() {
     drawMenuItemWithIcon(menuDepth, menuIndex);
   }
 
-  drawFooterCircles(menus[menuDepth].count, menuIndex);
+  if (carouselWasVisible && menuIndex < CAROUSEL_PAGE_COUNT)
+    drawFooterCircles(CAROUSEL_PAGE_COUNT, carouselPage);
+  else
+    drawFooterCircles(menus[menuDepth].count, menuIndex);
   u8g2.sendBuffer();
 }
 
@@ -622,6 +694,22 @@ void drawNetworkInfo() {
   u8g2.setFont(u8g2_font_5x7_tf);
   // u8g2.drawStr(80, 62, "BTN1:SALIR"); // Removed for auto-timeout
   
+  u8g2.sendBuffer();
+}
+
+// Pantalla de configuracion con marco/controles como la pantalla RTC.
+void drawCarouselConfigScreen() {
+  u8g2.clearBuffer();
+  drawHeader();
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.drawStr(0, 23, config.carouselEnabled ? "CARRUSEL: ON" : "CARRUSEL: OFF");
+  u8g2.setFont(u8g2_font_5x7_tf);
+  drawRotationArrows(104, 14);
+  u8g2.drawStr(0, 34, "PM2.5/TEMP/HUM");
+  u8g2.drawStr(0, 44, "Cada 10s. Guardado flash");
+  u8g2.drawFrame(0, 48, 128, 15);
+  u8g2.drawStr(3, 59, "B1:EXIT");
+  u8g2.drawStr(58, 59, config.carouselEnabled ? "B2:OFF" : "B2:ON");
   u8g2.sendBuffer();
 }
 
@@ -697,18 +785,7 @@ void drawGpsInfo() {
 // Muestra aviso visual y reinicia el ESP32 de forma controlada.
 // Se ejecuta desde menú de configuración.
 void handleRestart() {
-  showMessage("REINICIANDO...");
-  // Nota: ESP.restart() ocurrirá después, aquí solo iniciamos el mensaje
-  // En un sistema real no bloqueante, deberíamos setear un flag para reiniciar
-  // luego del mensaje Pero para simplificar, usaremos un pequeño delay justo
-  // antes del restart real si fuera crítico, aqui solo mostramos y esperamos un
-  // poco. Dado que restart mata todo, un delay aqui es aceptable
-  // excepcionalmente o mejor: no usamos delay, pero el usuario no verá mucho si
-  // reinicia de inmediato. Para hacerlo VERDADERAMENTE no bloqueante,
-  // necesitariamos un "pendingRestart" flag. Por ahora, aceptamos que REINICIO
-  // es una acción terminal.
-  delay(1000);
-  ESP.restart();
+  requestSystemRestart();
 }
 
 // Alterna modo WiFi AP para gestión de archivos en SD.
@@ -732,6 +809,7 @@ void ui_btn1_click() {
 
   if (!uiCanHandleAction())
     return;
+  resetCarouselTimer();
 
   if (displayState == DISP_PROMPT) {
     displayState = DISP_NORMAL;
@@ -740,7 +818,7 @@ void ui_btn1_click() {
     return;
   }
 
-  if (displayState == DISP_RTC) {
+  if (displayState == DISP_RTC || displayState == DISP_CAROUSEL) {
     displayState = DISP_NORMAL;
     renderDisplay();
     return;
@@ -777,6 +855,15 @@ void ui_btn1_click() {
 // Controla navegación entre niveles y acciones no críticas.
 void ui_btn2_click() {
   Serial.println("[UI] BTN2 Click");
+  resetCarouselTimer();
+  if (displayState == DISP_CAROUSEL) {
+    if (!uiCanHandleAction()) return;
+    lastOledActivity = millis();
+    if (config.oledAutoOff) u8g2.setPowerSave(0);
+    setCarouselEnabled(!config.carouselEnabled);
+    renderDisplay();
+    return;
+  }
 
   if (displayState == DISP_PROMPT) {
     // Perform Toggle using helper
@@ -879,9 +966,11 @@ void ui_btn2_click() {
     // Configuration Menu
     if (menuIndex == 0) { // RTC
       displayState = DISP_RTC;
-    } else if (menuIndex == 1) { // Reiniciar
+    } else if (menuIndex == 1) { // Carrusel persistente
+      displayState = DISP_CAROUSEL;
+    } else if (menuIndex == 2) { // Reiniciar
       handleRestart();
-    } else if (menuIndex == 2) { // Volver
+    } else if (menuIndex == 3) { // Volver
       menuDepth = 1;
       menuIndex = 0;
     }

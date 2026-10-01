@@ -231,6 +231,7 @@ Implementación en `serial_commands.ino` (entrada `\n`, case-insensitive).
 - `set sdsave 3|60|600|1200`
 - `set httpsend 3|60|600|1200`
 - `set httptimeout <5..30>`
+- `set carousel on|off` (Preferences: `config/carousel`, bool, default false)
 - `set oledoff on|off`
 - `set oledtime 60|120|180`
 - `set led on|off`

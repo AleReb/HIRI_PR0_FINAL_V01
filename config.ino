@@ -4,6 +4,8 @@
 // NOTA: struct SystemConfig y variable config están declaradas en el archivo
 // principal
 
+void resetCarouselTimer();
+
 // -------------------- Load Configuration --------------------
 void loadConfig() {
   prefs.begin("config", false);
@@ -17,6 +19,7 @@ void loadConfig() {
   config.httpTimeout = prefs.getUShort("httpTO", 15);
 
   // Display
+  config.carouselEnabled = prefs.getBool("carousel", false);
   config.oledAutoOff = prefs.getBool("oledOff", false);
   config.oledTimeout = prefs.getUInt("oledTO", 120000);
 
@@ -39,6 +42,8 @@ void loadConfig() {
                 config.sdAutoMount ? "ON" : "OFF", config.sdSavePeriod);
   Serial.printf("[CONFIG] HTTP send period: %lums, timeout: %us\n",
                 config.httpSendPeriod, config.httpTimeout);
+  Serial.printf("[CONFIG] Carousel: %s, interval: 10s\n",
+                config.carouselEnabled ? "ON" : "OFF");
   Serial.printf("[CONFIG] OLED auto-off: %s, timeout: %lums\n",
                 config.oledAutoOff ? "ON" : "OFF", config.oledTimeout);
   Serial.printf("[CONFIG] LED enabled: %s, brightness: %u%%\n",
@@ -63,6 +68,7 @@ void saveConfig() {
   prefs.putUShort("httpTO", config.httpTimeout);
 
   // Display
+  prefs.putBool("carousel", config.carouselEnabled);
   prefs.putBool("oledOff", config.oledAutoOff);
   prefs.putUInt("oledTO", config.oledTimeout);
 
@@ -83,6 +89,17 @@ void saveConfig() {
   Serial.println("[CONFIG] Saved to flash");
 }
 
+// Misma persistencia para menu y Serial; efecto inmediato, sin reiniciar.
+void setCarouselEnabled(bool enabled) {
+  if (config.carouselEnabled != enabled) {
+    config.carouselEnabled = enabled;
+    saveConfig();
+  }
+  resetCarouselTimer();
+  Serial.printf("[CONFIG] Carousel: %s (saved, interval: 10s)\n",
+                config.carouselEnabled ? "ON" : "OFF");
+}
+
 // -------------------- Reset to Defaults --------------------
 void configSetDefaults() {
   config.sdAutoMount = false; // NO montar en boot
@@ -91,6 +108,8 @@ void configSetDefaults() {
   config.httpSendPeriod = 3000; // 3 segundos
   config.httpTimeout = 15;      // 15 segundos
 
+  config.carouselEnabled = false; // Carrusel desactivado por defecto
+  resetCarouselTimer();
   config.oledAutoOff = false;  // Siempre encendida
   config.oledTimeout = 120000; // 2 minutos
 
@@ -122,6 +141,8 @@ void printConfig() {
   Serial.printf("  Timeout:            %u seconds\n", config.httpTimeout);
 
   Serial.println("\n[Display OLED]");
+  Serial.printf("  Carousel (10 s):     %s\n",
+                config.carouselEnabled ? "ON" : "OFF");
   Serial.printf("  Auto-off:           %s\n",
                 config.oledAutoOff ? "ON" : "OFF");
   Serial.printf("  Timeout:            %lu ms (%lu s)\n", config.oledTimeout,
