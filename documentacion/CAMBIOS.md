@@ -1,5 +1,11 @@
 # Registro de Cambios - FirmwarePro
 
+## [V0.1.9] - 2026-11-19
+### Perfiles HIRI 100 a 109
+- Se agregan los 10 equipos con los IDs de sensores de la lista de dispositivos.
+- Sus URL envían 10 mediciones de PMS y GPS/módem por HTTP. Los perfiles
+  anteriores conservan sus 17, 18 o 19 campos.
+
 ## [V0.1.8] - 2026-10-01
 ### Perfiles HIRI 84 a 89 y lista de dispositivos en README
 - Se agregan equipos 84, 85, 86, 87, 88 y 89 a DEVICE_API_PROFILES, usando

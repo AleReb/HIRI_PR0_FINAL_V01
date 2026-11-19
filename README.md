@@ -5,7 +5,7 @@ Firmware para estación de monitoreo técnico-científico basada en ESP32, con a
 ## Estado
 
 - Plataforma objetivo: **ESP32 Dev Module** (`esp32:esp32:esp32`)
-- Versión de referencia documentada: **Pro V0.1.8**
+- Versión de referencia documentada: **Pro V0.1.9**
 
 ## Funcionalidades principales
 
@@ -76,18 +76,23 @@ de ruta a internet.
 
 ## Configurar equipos y sensores de la API
 
-En `HIRI_PR0_FINAL_V01.ino`, cambie solamente `DEVICE_ID_STR` para seleccionar
-un equipo de `DEVICE_API_PROFILES`. La tabla permanece junto a `API_BASE`,
-en el lugar de las listas originales, con todos los equipos visibles.
-La URL utiliza los IDs de sensores, variables y valores del perfil elegido.
-`"06"` y `"6"` seleccionan el mismo perfil; el identificador escrito se conserva
-en pantalla, archivos y valor enviado del equipo.
+En `HIRI_PR0_FINAL_V01.ino`, cambie `DEVICE_ID_STR` al número HIRI del equipo
+antes de compilar y cargar el firmware. Para el HIRI 100 use esta configuración.
 
-Para agregar un equipo, copie una fila de la tabla y complete:
+```cpp
+const char *DEVICE_ID_STR = "100";
+```
+
+`"06"` y `"6"` seleccionan el mismo perfil. El identificador escrito se usa
+en pantalla, en el nombre de los archivos y de la red WiFi SD, y en la
+telemetría de los perfiles que incluyen la variable 42.
+
+Para agregar un equipo a `DEVICE_API_PROFILES`, copie una fila y complete
+estos campos.
 
 - ID del equipo.
 - Lista de IDs de sensores asignados por el backend.
-- Lista de variables: base, SHT31 o SDS198.
+- Constante de variables según el perfil de telemetría de la tabla siguiente.
 - Sensor extra: `EXTRA_NONE`, `EXTRA_SHT31` o `EXTRA_SDS198`.
 
 El orden de las mediciones está comentado encima de la tabla. Las tres listas
@@ -103,10 +108,37 @@ la tabla configura la telemetría y conserva los drivers actuales.
 
 ### Lista de dispositivos HIRI
 
-Perfiles disponibles en `DEVICE_API_PROFILES`: **1–10 y 80–89**.
-Los HIRI **82 y 83** ya estaban registrados y coinciden con los mapeos
-proporcionados; se agregaron **84, 85, 86, 87, 88 y 89**. Cada uno utiliza
-19 valores y el perfil `EXTRA_SHT31`. HIRI 86 tiene una sola entrada.
+| Equipos HIRI | Valores HTTP | Constante de variables |
+|---|---:|---|
+| 100–109 | 10 | `IDS_VARIABLES_PMS_GPS` |
+| 1, 2, 7 y 8 | 17 | `IDS_VARIABLES` |
+| 6 | 18 | `IDS_VARIABLES06` |
+| 3–5, 9–10 y 80–89 | 19 | `IDS_VARIABLESSHT31` |
+
+#### HIRI 100–109
+
+Cada equipo envía cinco mediciones PMS y cinco de módem/GPS al endpoint
+HTTP `http://api-sensores.cmasccp.cl/insertarMedicion`. En `idsSensores` se
+repite cinco veces el ID de PMS y luego cinco veces el ID de módem/GPS.
+
+| HIRI / DEVICE_ID_STR | PMS, campos 1–5 | Módem/GPS, campos 6–10 |
+|---|---:|---:|
+| 100 | 1195 | 1334 |
+| 101 | 1335 | 1336 |
+| 102 | 1337 | 1338 |
+| 103 | 1339 | 1340 |
+| 104 | 1439 | 1440 |
+| 105 | 1441 | 1442 |
+| 106 | 1443 | 1444 |
+| 107 | 1445 | 1446 |
+| 108 | 1447 | 1448 |
+| 109 | 1449 | 1450 |
+
+`idsVariables` es `3,6,7,8,9,11,12,15,45,46`. Los valores corresponden a
+las posiciones 1–10 de la tabla de mediciones más abajo. El perfil determina
+las mediciones HTTP. El registro local mantiene el formato del CSV.
+
+#### Mapeo de sensores HIRI 82–89
 
 | HIRI / DEVICE_ID_STR | PMS, campos 1–5 | Módem/GPS, 6–10 | RTC, 11 | Batería, 12 | Equipo, 13–17 | SHT31, 18–19 |
 |---|---|---|---|---|---|---|
@@ -124,7 +156,7 @@ HIRI 84 utiliza cinco veces 951 para PMS, cinco veces 952 para módem/GPS,
 953 para RTC, 954 para batería, cinco veces 955 para equipo y dos veces 956
 para SHT31. El firmware mantiene las listas completas y explícitas.
 
-El orden de `idsVariables` es común a estos ocho equipos:
+Los perfiles SHT31 usan la siguiente secuencia de `idsVariables`.
 
 ```text
 3,6,7,8,9,11,12,15,45,46,3,4,11,12,42,43,44,3,6
@@ -151,12 +183,6 @@ El orden de `idsVariables` es común a estos ocho equipos:
 | 17 | Equipo | 44 | Registro SD activo | Bool (0/1) |
 | 18 | SHT31 | 3 | Temperatura | °C |
 | 19 | SHT31 | 6 | Humedad | % |
-
-Para seleccionar uno, cambie solamente el identificador, por ejemplo:
-
-```cpp
-const char *DEVICE_ID_STR = "89";
-```
 
 Los textos descriptivos de `valores` proporcionados representan el significado
 de cada campo. El firmware los sustituye por las lecturas actuales al construir
@@ -208,8 +234,8 @@ control de VBAT no se puede verificar un apagado físico. Referencia de tiempos:
 
 ## Documentación
 
-- **Manual de Usuario:** `documentacion/MANUAL_USUARIO.md`
-- **Manual Técnico:** `documentacion/MANUAL_TECNICO.md`
+- [Manual de Usuario](documentacion/MANUAL_USUARIO.md)
+- [Manual Técnico](documentacion/MANUAL_TECNICO.md)
 - **PCB, pinout y revisión de hardware:** [`PCB/README.md`](PCB/README.md)
 - **Historial de cambios:** `documentacion/CAMBIOS.md`
 - **Guía de desarrollo/versionado:** `documentacion/DEVELOPER_GUIDELINES.md`
@@ -310,7 +336,7 @@ arduino-cli compile --fqbn esp32:esp32:esp32 --libraries ./libraries .
 ### Subir a dispositivo (ejemplo COM5)
 
 ```bash
-arduino-cli upload -p COM5 --fqbn esp32:esp32:esp32 FirmwarePro.ino
+arduino-cli upload -p COM5 --fqbn esp32:esp32:esp32 .
 ```
 
 ## Disclaimer de responsabilidad

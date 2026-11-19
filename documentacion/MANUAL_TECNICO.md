@@ -1,7 +1,8 @@
 # FirmwarePro — Manual Técnico
 
-Versión de referencia: **Pro V0.0.35**  
-Objetivo: documentación técnica para operación, mantenimiento e integración de producto científico-técnico.
+Versión de referencia **Pro V0.1.9**
+
+Documentación técnica para la operación, el mantenimiento y la integración del equipo.
 
 ---
 
@@ -9,7 +10,7 @@ Objetivo: documentación técnica para operación, mantenimiento e integración 
 
 Firmware modular en archivos `.ino`:
 
-- `FirmwarePro.ino` → núcleo (setup/loop, estados globales, orquestación)
+- `HIRI_PR0_FINAL_V01.ino` → núcleo (setup/loop, estados globales, perfiles HTTP)
 - `config.h` / `config.ino` → estructura y persistencia de configuración
 - `gps.ino` → GNSS (NMEA parsing, watchdog, diagnósticos, XTRA)
 - `pms.ino` → PMS5003 + SDS198 + LED PM2.5
@@ -109,6 +110,34 @@ Formato CSV principal con 23 campos, incluyendo:
 ---
 
 ## 6) Subsistema HTTP/Red celular
+
+### Selección del perfil y estructura de la URL
+
+Configure `DEVICE_ID_STR` con el número HIRI antes de compilar. En el
+arranque, `selectDeviceApiProfile()` busca el ID en `DEVICE_API_PROFILES`.
+Cada fila indica los IDs de sensores, los IDs de variables y el sensor extra.
+Por ejemplo, para HIRI 100 use `"100"` como `DEVICE_ID_STR`.
+
+`buildMeasurementUrl()` arma la solicitud GET al endpoint
+`http://api-sensores.cmasccp.cl/insertarMedicion`. Los parámetros CSV
+`idsSensores`, `idsVariables` y `valores` se alinean por posición.
+
+- **HIRI 100–109.** Envían 10 valores con `IDS_VARIABLES_PMS_GPS` y
+  `EXTRA_NONE`. Los cinco primeros campos corresponden al PMS
+  (temperatura, humedad, PM1, PM2.5 y PM10). Los cinco siguientes
+  corresponden al módem/GPS (latitud, longitud, señal celular, velocidad
+  y satélites). Para HIRI 100, el ID 1195 se repite cinco veces y luego
+  el ID 1334 se repite otras cinco.
+- **HIRI 1–10 y 80–89.** Envían 17 campos base, más PM100 en el HIRI 6
+  o temperatura y humedad SHT31 en los perfiles correspondientes.
+
+Un ID desconocido impide el envío. Si las tres listas difieren en cantidad
+de campos, el firmware registra el error `[API][ERR]` en Serial y descarta la
+solicitud. El perfil HTTP se aplica a la transmisión. El CSV local mantiene
+sus 23 columnas. Los IDs por equipo y el orden de variables se detallan en
+el [README](../README.md#lista-de-dispositivos-hiri).
+
+### Envío con el SIM7600
 
 `http.ino` implementa ciclo robusto por AT:
 
@@ -248,16 +277,21 @@ Implementación en `serial_commands.ino` (entrada `\n`, case-insensitive).
 ## 11) Procedimientos de validación (QA)
 
 ## 11.1 Build
-- `arduino-cli compile --fqbn esp32:esp32:esp32 FirmwarePro.ino`
+
+- Desde la raíz del repositorio, ejecute `arduino-cli compile --fqbn esp32:esp32:esp32 --libraries ./libraries .`
 
 ## 11.2 Flash
-- `arduino-cli upload -p COMx --fqbn esp32:esp32:esp32 FirmwarePro.ino`
+
+- `arduino-cli upload -p COMx --fqbn esp32:esp32:esp32 .`
 
 ## 11.3 Smoke test
+
 1. Boot sin errores en serial
 2. SD montada y CSV creado
 3. GNSS entrega NMEA/fix
-4. HTTP responde 2xx
+4. Tras iniciar el muestreo, Serial muestra la URL esperada con el prefijo
+   `[HTTP] GET` y el servidor responde 2xx. Para un HIRI 100–109, compruebe
+   los 10 campos en cada parámetro CSV y los IDs del equipo.
 5. WiFi AP visible y web accesible en `192.168.4.1`
 6. Operaciones CRUD de archivos en SD
 

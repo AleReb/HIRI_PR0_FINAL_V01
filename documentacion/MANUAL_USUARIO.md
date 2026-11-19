@@ -1,7 +1,8 @@
 # FirmwarePro — Manual de Usuario
 
-Versión de referencia: **Pro V0.0.35**  
-Plataforma: **ESP32 Dev Module (esp32:esp32:esp32)**
+Versión de referencia **Pro V0.1.9**
+
+Plataforma **ESP32 Dev Module (esp32:esp32:esp32)**
 
 ---
 
@@ -29,6 +30,11 @@ FirmwarePro es un firmware para monitoreo ambiental y telemetría técnica que i
    - **BTN2**: seleccionar/confirmar
 4. Para empezar muestreo/transmisión:
    - Menú principal → **EMPEZAR MUESTREO** → confirmar con BTN2.
+
+El ID HIRI aparece al arrancar. También puedes consultarlo con el comando
+`sysinfo` en el monitor serie. Si preparas el firmware para otro equipo,
+configura su número en `DEVICE_ID_STR` antes de compilar y cargar el sketch.
+Consulta la [configuración de equipos en el README](../README.md#configurar-equipos-y-sensores-de-la-api).
 
 ---
 
@@ -112,7 +118,12 @@ Desde la UI, al salir del modo WiFi se apaga el AP y el equipo vuelve al ciclo n
 
 ---
 
-## 6) Datos registrados en SD
+## 6) Envío HTTP y registro en SD
+
+Los equipos **HIRI 100 a 109** envían por HTTP la temperatura, la humedad,
+PM1, PM2.5, PM10, la latitud, la longitud, la señal celular, la velocidad y
+el número de satélites. Para consultar el registro local completo, descarga
+el CSV desde WiFi SD.
 
 Archivo diario por dispositivo:
 
@@ -150,8 +161,11 @@ Además:
 - Verificar en menú/serial estado SD.
 
 ### No transmite HTTP
+
 - Revisar CSQ y operador.
 - Confirmar cobertura celular y APN.
+- Si en el monitor serie aparece `[API][ERR]`, verificar con `sysinfo` que
+  el ID del firmware corresponde al equipo y que figura en la lista del README.
 
 ### GPS sin fix
 - Dar más tiempo al GNSS al inicio.

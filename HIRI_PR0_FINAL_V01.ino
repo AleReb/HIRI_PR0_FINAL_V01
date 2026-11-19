@@ -50,7 +50,7 @@ const byte CMD = 0xB4;
 const byte TAIL = 0xAB;
 
 // Firmware version
-String VERSION = "Pro V0.1.8";
+String VERSION = "Pro V0.1.9";
 const uint8_t CONNECTION_MAX_STRIKES = 5; // EDITAR AQUI: intentos AT y de red.
 static_assert(CONNECTION_MAX_STRIKES > 0, "Debe haber al menos un strike");
 // Cada strike AT permite iniciar el modem; no es una consulta instantanea.
@@ -151,12 +151,13 @@ String apIpStr = "0.0.0.0";
 const char *API_BASE = "http://api-sensores.cmasccp.cl/insertarMedicion";
 // ================= TABLA DE EQUIPOS / SENSORES API =================
 // Mantener aqui los IDs asignados por el backend (no se calculan por formula).
-// Orden de los 17 valores base, alineado con idsSensores e idsVariables:
+// Orden de los valores, alineado con idsSensores e idsVariables:
 //  1..5  PMS: temperatura, humedad, PM1, PM2.5, PM10
 //  6..10 Modem/GPS: latitud, longitud, senal, velocidad, satelites
 // 11..12 RTC: temperatura; bateria: voltaje
 // 13..17 Equipo: latitud, longitud, DEVICE_ID_STR, contador, estado SD
 // Extras al final: SHT31 = temperatura/humedad; SDS198 = PM100.
+const char *IDS_VARIABLES_PMS_GPS = "3,6,7,8,9,11,12,15,45,46";
 const char *IDS_VARIABLES = "3,6,7,8,9,11,12,15,45,46,3,4,11,12,42,43,44";
 const char *IDS_VARIABLESSHT31 = "3,6,7,8,9,11,12,15,45,46,3,4,11,12,42,43,44,3,6";
 const char *IDS_VARIABLES06 = "3,6,7,8,9,11,12,15,45,46,3,4,11,12,42,43,44,51";
@@ -193,6 +194,16 @@ const DeviceApiProfile DEVICE_API_PROFILES[] = {
   {87, "969,969,969,969,969,970,970,970,970,970,971,972,973,973,973,973,973,974,974", IDS_VARIABLESSHT31, EXTRA_SHT31}, // Equipo 87: 19 valores
   {88, "975,975,975,975,975,976,976,976,976,976,977,978,979,979,979,979,979,980,980", IDS_VARIABLESSHT31, EXTRA_SHT31}, // Equipo 88: 19 valores
   {89, "981,981,981,981,981,982,982,982,982,982,983,984,985,985,985,985,985,986,986", IDS_VARIABLESSHT31, EXTRA_SHT31}, // Equipo 89: 19 valores
+  {100, "1195,1195,1195,1195,1195,1334,1334,1334,1334,1334", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {101, "1335,1335,1335,1335,1335,1336,1336,1336,1336,1336", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {102, "1337,1337,1337,1337,1337,1338,1338,1338,1338,1338", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {103, "1339,1339,1339,1339,1339,1340,1340,1340,1340,1340", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {104, "1439,1439,1439,1439,1439,1440,1440,1440,1440,1440", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {105, "1441,1441,1441,1441,1441,1442,1442,1442,1442,1442", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {106, "1443,1443,1443,1443,1443,1444,1444,1444,1444,1444", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {107, "1445,1445,1445,1445,1445,1446,1446,1446,1446,1446", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {108, "1447,1447,1447,1447,1447,1448,1448,1448,1448,1448", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
+  {109, "1449,1449,1449,1449,1449,1450,1450,1450,1450,1450", IDS_VARIABLES_PMS_GPS, EXTRA_NONE},
 };
 // NUEVO TIPO DE SENSOR: agregar su enum, lista de variables y lectura de valores
 // en buildMeasurementUrl(); inicializar/leer su hardware en setup()/loop().
@@ -553,19 +564,15 @@ bool buildMeasurementUrl(String &measurementUrl) {
   String v8 = safeIntStr(csq);
   String v9 = (gpsSpeedKmh.length() ? gpsSpeedKmh : "0");
   String v10 = safeSatsStr(satellitesStr);
-  String v11 = safeFloatStr(rtcTempC);
-  String v12 = safeFloatStr(batV);
-  String v13 = v6; // Lat
-  String v14 = v7; // Lon
-  String v15 = String(DEVICE_ID_STR);
-  String v16 = safeUIntStr(sendCounter + 1);
-  String v17 = loggingEnabled ? "1" : "0";
-  const String baseVal = v1 + "," + v2 + "," + v3 + "," + v4 + "," + v5 +
-                         "," + v6 + "," + v7 + "," + v8 + "," + v9 + "," +
-                         v10 + "," + v11 + "," + v12 + "," + v13 + "," +
-                         v14 + "," + v15 + "," + v16 + "," + v17;
+  String val = v1 + "," + v2 + "," + v3 + "," + v4 + "," + v5 +
+               "," + v6 + "," + v7 + "," + v8 + "," + v9 + "," + v10;
 
-  String val = baseVal;
+  const uint8_t variableCount = countCsvFields(activeApiProfile->variableIds);
+  if (variableCount > countCsvFields(IDS_VARIABLES_PMS_GPS)) {
+    val += "," + safeFloatStr(rtcTempC) + "," + safeFloatStr(batV) +
+           "," + v6 + "," + v7 + "," + DEVICE_ID_STR +
+           "," + safeUIntStr(sendCounter + 1) + "," + (loggingEnabled ? "1" : "0");
+  }
   switch (activeApiProfile->extraSensor) {
   case EXTRA_NONE:
     break;
@@ -581,7 +588,6 @@ bool buildMeasurementUrl(String &measurementUrl) {
   }
 
   const uint8_t sensorCount = countCsvFields(activeApiProfile->sensorIds);
-  const uint8_t variableCount = countCsvFields(activeApiProfile->variableIds);
   const uint8_t valueCount = countCsvFields(val.c_str());
   if (sensorCount != variableCount || sensorCount != valueCount) {
     Serial.printf("[API][ERR] Campos desalineados: sensores=%u variables=%u valores=%u\n",
